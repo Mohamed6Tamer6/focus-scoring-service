@@ -1,4 +1,3 @@
-# app/services/auth.py
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -20,8 +19,6 @@ def register_user(db: Session, user_data: UserCreate) -> UserResponse:
 def login_user(db: Session, user_data: UserLogin) -> Token:
     user = get_user_by_email(db, user_data.email)
 
-    # Constant-time rejection — don't differentiate between "user not found"
-    # and "wrong password" to prevent user enumeration attacks
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -29,5 +26,5 @@ def login_user(db: Session, user_data: UserLogin) -> Token:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = create_access_token(data={"user_id": user.id, "email": user.email})
+    token = create_access_token(data={"sub": str(user.id), "email": user.email})
     return Token(access_token=token)
