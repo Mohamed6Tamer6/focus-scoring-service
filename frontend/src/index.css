@@ -1,0 +1,72 @@
+:root {
+  --primary: #2563eb;
+  /* True Blue */
+  --primary-hover: #1d4ed8;
+  --bg-dark: #00040a;
+  /* Darkest Navy */
+  --bg-card: #0c1a32;
+  /* Deep Navy Card */
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --glass-border: rgba(37, 99, 235, 0.4);
+  --error: #ef4444;
+  --success: #10b981;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-image:
+    radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.2) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(30, 58, 138, 0.2) 0%, transparent 40%);
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Outfit', sans-serif;
+}
+
+button {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+a {
+  text-decoration: none;
+  color: var(--primary);
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--primary-hover);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
