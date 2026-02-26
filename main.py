@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.database import Base, engine
 from app.api.routes import auth_router
 import app.models.user
+import app.models.refresh_token
 
 Base.metadata.create_all(bind=engine)
 
