@@ -51,7 +51,6 @@ def login_user(db: Session, user_data: UserLogin) -> tuple[Token, str]:
 def refresh_access_token(db: Session, refresh_token: str) -> tuple[Token, str]:
     db_token = get_refresh_token(db, refresh_token)
 
-    # Reuse Detection — token موجود بس revoked
     if db_token and db_token.revoked:
         revoke_all_user_tokens(db, db_token.user_id)
         raise HTTPException(
@@ -65,14 +64,12 @@ def refresh_access_token(db: Session, refresh_token: str) -> tuple[Token, str]:
             detail="Invalid refresh token",
         )
 
-    # نتأكد إن الـ token مش expired
     if datetime.now(timezone.utc) > db_token.expires_at.replace(tzinfo=timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token expired",
         )
 
-    # Token Rotation — نعمل revoke للقديم ونولد جديد
     revoke_token(db, refresh_token)
 
     new_access_token = create_access_token(
