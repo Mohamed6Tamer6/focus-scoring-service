@@ -11,7 +11,8 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    token_hash = Column(String, nullable=False, index=True)
+    token_hash = Column(String, nullable=False, index=True)      # Fast lookup (SHA256)
+    token_verifier = Column(String, nullable=False)             # Salted verify (Bcrypt)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     revoked = Column(Boolean, default=False, nullable=False)

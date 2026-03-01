@@ -30,8 +30,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
-    token, refresh_token = login_user(db, user_data)
-    set_refresh_cookie(response, refresh_token)
+    token = login_user(db, user_data)
+    set_refresh_cookie(response, token.refresh_token)
     return token
 
 
@@ -46,8 +46,8 @@ def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token missing",
         )
-    token, new_refresh_token = refresh_access_token(db, refresh_token)
-    set_refresh_cookie(response, new_refresh_token)
+    token = refresh_access_token(db, refresh_token)
+    set_refresh_cookie(response, token.refresh_token)
     return token
 
 

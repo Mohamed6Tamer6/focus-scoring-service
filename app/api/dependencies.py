@@ -1,5 +1,5 @@
 # app/api/dependencies.py
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ def get_current_user(
     if payload is None:
         raise CREDENTIALS_EXCEPTION
 
-    user_id: int = payload.get("user_id")
+    user_id = payload.get("sub")
     if user_id is None:
         raise CREDENTIALS_EXCEPTION
 

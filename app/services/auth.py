@@ -29,7 +29,7 @@ def register_user(db: Session, user_data: UserCreate) -> UserResponse:
     return create_user(db, user_data)
 
 
-def login_user(db: Session, user_data: UserLogin) -> tuple[Token, str]:
+def login_user(db: Session, user_data: UserLogin) -> Token:
     user = get_user_by_email(db, user_data.email)
 
     if not user or not verify_password(user_data.password, user.hashed_password):
@@ -45,10 +45,10 @@ def login_user(db: Session, user_data: UserLogin) -> tuple[Token, str]:
     expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     create_refresh_token(db, user_id=user.id, token=refresh_token, expires_at=expires_at)
 
-    return Token(access_token=access_token), refresh_token
+    return Token(access_token=access_token, refresh_token=refresh_token)
 
 
-def refresh_access_token(db: Session, refresh_token: str) -> tuple[Token, str]:
+def refresh_access_token(db: Session, refresh_token: str) -> Token:
     db_token = get_refresh_token(db, refresh_token)
 
     if db_token and db_token.revoked:
@@ -79,7 +79,7 @@ def refresh_access_token(db: Session, refresh_token: str) -> tuple[Token, str]:
     expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     create_refresh_token(db, user_id=db_token.user_id, token=new_refresh_token, expires_at=expires_at)
 
-    return Token(access_token=new_access_token), new_refresh_token
+    return Token(access_token=new_access_token, refresh_token=new_refresh_token)
 
 
 def logout_user(db: Session, refresh_token: str) -> None:

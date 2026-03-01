@@ -1,16 +1,18 @@
 from sqlalchemy.orm import Session
 from app.models.refresh_token import RefreshToken
-from app.utils.token_utils import hash_refresh_token
+from app.utils.token_utils import get_token_lookup_hash, hash_token_for_storage, verify_stored_token
 from datetime import datetime
 from uuid import UUID
 
 
 def create_refresh_token(db: Session, user_id: UUID, token: str, expires_at: datetime) -> RefreshToken:
+    token_hash = get_token_lookup_hash(token)
+    token_verifier = hash_token_for_storage(token)
     
-    token_hash = hash_refresh_token(token)
     db_token = RefreshToken(
         user_id=user_id,
         token_hash=token_hash,
+        token_verifier=token_verifier,
         expires_at=expires_at
     )
     db.add(db_token)
@@ -20,20 +22,24 @@ def create_refresh_token(db: Session, user_id: UUID, token: str, expires_at: dat
 
 
 def get_refresh_token(db: Session, token: str) -> RefreshToken | None:
-    
-    token_hash = hash_refresh_token(token)
-    return db.query(RefreshToken).filter(
+    token_hash = get_token_lookup_hash(token)
+    db_tokens = db.query(RefreshToken).filter(
         RefreshToken.token_hash == token_hash
-    ).first()
+    ).all()
+    
+    for db_token in db_tokens:
+        if verify_stored_token(token, db_token.token_verifier):
+            return db_token
+            
+    return None
 
 
 def revoke_token(db: Session, token: str) -> None:
+    db_token = get_refresh_token(db, token)
+    if db_token:
+        db_token.revoked = True
+        db.commit()
 
-    token_hash = hash_refresh_token(token)
-    db.query(RefreshToken).filter(
-        RefreshToken.token_hash == token_hash
-    ).update({"revoked": True})
-    db.commit()
 
 
 def revoke_all_user_tokens(db: Session, user_id: UUID) -> None:
