@@ -108,35 +108,35 @@ The API will be available at `http://127.0.0.1:8000`.
 
 ---
 
-## 🎨 Frontend (واجهة المستخدم)
+## 🎨 Frontend (User Interface)
 
-تمت إضافة واجهة مستخدم عصرية وبسيطة باستخدام **React** و **Vite**.
+A modern and intuitive user interface built using **React** and **Vite**.
 
-### ✨ الميزات المضافة (Features)
-- **تصميم عصري (Navy Theme)**: تصميم يعتمد على اللون الكحلي العيق مع تأثيرات الـ Glassmorphism.
-- **صفحات التحقق**: صفحات تسجيل دخول (Login) وإنشاء حساب (Signup) جاهزة ومبسطة.
-- **تفاعلية كاملة**: إضافة حركات دخول سلسة (Animations) وتنسيقات متوافقة مع جميع الشاشات.
+### ✨ Features
+-   **Modern Design (Navy Theme)**: Deep navy blue aesthetic featuring high-fidelity Glassmorphism effects.
+-   **Authentication Flow**: Clean and professional Login and Signup screens.
+-   **Fully Responsive**: Smooth motion animations and adaptive layouts for a seamless cross-device experience.
 
-### 🚀 تشغيل الواجهة (Running the Frontend)
+### 🚀 Running the Frontend
 
-لتشغيل الواجهة الأمامية، اتبع الخطوات التالية:
+To launch the frontend application, execute the following commands:
 
-1. **انتقل إلى مجلد الـ frontend**:
-   ```bash
-   cd frontend
-   ```
+1.  **Navigate to the frontend directory**:
+    ```bash
+    cd frontend
+    ```
 
-2. **تنزيل المكتبات (لأول مرة فقط)**:
-   ```bash
-   npm install
-   ```
+2.  **Install dependencies (Initial setup)**:
+    ```bash
+    npm install
+    ```
 
-3. **تشغيل التطبيق**:
-   ```bash
-   npm run dev
-   ```
+3.  **Start the development server**:
+    ```bash
+    npm run dev
+    ```
 
-سيكون التطبيق متاحاً على الرابط: `http://localhost:3000`
+The application will be accessible at: `http://localhost:3000`
 
 ---
 
