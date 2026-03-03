@@ -94,12 +94,49 @@ The API will be available at `http://127.0.0.1:8000`.
 │   ├── schemas/        # Pydantic models
 │   ├── services/       # Business logic
 │   └── utils/          # Helper functions
+├── frontend/           # React + Vite Frontend
+│   ├── src/            # Frontend Source Code
+│   │   ├── components/ # React Components (Login, Signup)
+│   │   └── ...
+│   └── ...
 ├── focus_detector.py   # Core AI focus detection logic
 ├── main.py             # FastAPI entry point
 ├── config.py           # Configuration management
 ├── requirements.txt    # Project dependencies
 └── .env                # Environment variables
 ```
+
+---
+
+## 🎨 Frontend (User Interface)
+
+A modern and intuitive user interface built using **React** and **Vite**.
+
+### ✨ Features
+-   **Modern Design (Navy Theme)**: Deep navy blue aesthetic featuring high-fidelity Glassmorphism effects.
+-   **Authentication Flow**: Clean and professional Login and Signup screens.
+-   **Fully Responsive**: Smooth motion animations and adaptive layouts for a seamless cross-device experience.
+
+### 🚀 Running the Frontend
+
+To launch the frontend application, execute the following commands:
+
+1.  **Navigate to the frontend directory**:
+    ```bash
+    cd frontend
+    ```
+
+2.  **Install dependencies (Initial setup)**:
+    ```bash
+    npm install
+    ```
+
+3.  **Start the development server**:
+    ```bash
+    npm run dev
+    ```
+
+The application will be accessible at: `http://localhost:3000`
 
 ---
 
