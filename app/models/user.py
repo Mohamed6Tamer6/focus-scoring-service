@@ -18,3 +18,4 @@ class User(Base):
 
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     focus_sessions = relationship("FocusSession", back_populates="user", cascade="all, delete-orphan")
+    user_roles = relationship("UserRole", primaryjoin="User.id == foreign(UserRole.user_id)", cascade="all, delete-orphan")

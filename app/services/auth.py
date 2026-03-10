@@ -19,6 +19,9 @@ from config import settings
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
+from app.services import rbac_service
+from app.repositories.rbac_repository import get_role_by_name
+
 def register_user(db: Session, user_data: UserCreate) -> UserResponse:
     existing_user = get_user_by_email(db, user_data.email)
     if existing_user:
@@ -26,7 +29,24 @@ def register_user(db: Session, user_data: UserCreate) -> UserResponse:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-    return create_user(db, user_data)
+    
+    # Create the user
+    user = create_user(db, user_data)
+    
+    # ── RBAC: Assign 'admin' role automatically ──
+    try:
+        admin_role = get_role_by_name(db, "admin")
+        if not admin_role:
+            # Create role if it doesn't exist (safety first)
+            admin_role = rbac_service.create_role(db, name="admin", description="Automatic admin role")
+        
+        rbac_service.assign_role_to_user(db, user_id=user.id, role_id=admin_role.id)
+    except Exception as e:
+        # We don't want registration to fail if RBAC fails, 
+        # but in this case the user specifically wants this, so maybe just log it.
+        print(f"RBAC Error during registration: {e}")
+    
+    return user
 
 
 def login_user(db: Session, user_data: UserLogin) -> Token:

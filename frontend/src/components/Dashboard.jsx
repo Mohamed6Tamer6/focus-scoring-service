@@ -15,6 +15,7 @@ const Dashboard = () => {
     const intervalRef = useRef(null);
 
     const [isTracking, setIsTracking] = useState(false);
+    const [isStopping, setIsStopping] = useState(false);
     const [wsConnected, setWsConnected] = useState(false);
     const [focusZone, setFocusZone] = useState('normal');
     const [cameraReady, setCameraReady] = useState(false);
@@ -168,6 +169,7 @@ const Dashboard = () => {
             } else if (data.type === 'report') {
                 setReport(data.report);
                 setIsTracking(false);
+                setIsStopping(false);
                 setLiveData(null);
                 fetchSessions();
                 ws.close();
@@ -178,6 +180,7 @@ const Dashboard = () => {
         ws.onclose = () => {
             setWsConnected(false);
             setIsTracking(false);
+            setIsStopping(false);
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
 
@@ -187,17 +190,23 @@ const Dashboard = () => {
     };
 
     const handleStop = () => {
+        setIsStopping(true);
+        // Stop sending frames immediately
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
         }
+
+        // IMPORTANT: Stop camera immediately for better UX
+        stopCamera();
+
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            // Signal server to stop and wait for report
             wsRef.current.send(JSON.stringify({ action: 'stop' }));
-            // We wait for the 'report' message, which will stop tracking and then close the ws.
         } else {
             setIsTracking(false);
+            setIsStopping(false);
             setLiveData(null);
-            stopCamera();
         }
     };
 
@@ -234,13 +243,16 @@ const Dashboard = () => {
         downloadAnchorNode.remove();
     };
 
-    const handleDownloadPDF = async () => {
-        if (!report || !report.id) {
+    const handleDownloadPDF = async (sessionId) => {
+        // If sessionId is an event object (from onClick={handleDownloadPDF}), use report.id
+        const id = (typeof sessionId === 'string') ? sessionId : (report && report.id);
+
+        if (!id) {
             alert("Session ID not available to download PDF.");
             return;
         }
         try {
-            const res = await fetch(`${API_BASE}/focus/sessions/${report.id}/pdf`, {
+            const res = await fetch(`${API_BASE}/focus/sessions/${id}/pdf`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -251,13 +263,13 @@ const Dashboard = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `focus_report_${report.id}.pdf`;
+            a.download = `focus_report_${id}.pdf`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error(err);
-            alert("Error downloading PDF");
+            console.error('PDF Download Error:', err);
+            alert(`Error downloading PDF: ${err.message}`);
         }
     };
 
@@ -294,8 +306,8 @@ const Dashboard = () => {
                         {isTracking ? 'Tracking In Progress...' : 'Start Tracking'}
                     </button>
 
-                    <button className="btn-stop" onClick={handleStop} disabled={!isTracking}>
-                        Stop Tracking
+                    <button className="btn-stop" onClick={handleStop} disabled={!isTracking || isStopping}>
+                        {isStopping ? 'Finalizing Report...' : 'Stop Tracking'}
                     </button>
 
                     <button className="logout-btn" onClick={handleLogout} style={{ marginTop: '20px' }}>
@@ -399,13 +411,64 @@ const Dashboard = () => {
 
                 {sessions.length > 0 && !isTracking && !report && (
                     <div className="past-sessions animate-fade-in" style={{ marginTop: '20px' }}>
-                        <h3>📋 Session History</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h3 style={{ margin: 0 }}>📋 Session History</h3>
+                            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Showing last 10 sessions</span>
+                        </div>
+                        <div className="history-header" style={{
+                            display: 'flex',
+                            padding: '10px 12px',
+                            color: '#94a3b8',
+                            fontSize: '0.75rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                            <div style={{ flex: 1.5 }}>Date & Time</div>
+                            <div style={{ flex: 1, textAlign: 'center' }}>Rating</div>
+                            <div style={{ flex: 0.5, textAlign: 'right' }}>Action</div>
+                        </div>
                         <div className="event-list">
-                            {sessions.slice(0, 5).map((s) => (
-                                <div key={s.id} className="event-dropdown" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>{new Date(s.created_at).toLocaleDateString()}</span>
-                                    <span>{formatTime(s.total_time)}</span>
-                                    <span style={{ fontWeight: 'bold' }}>{s.overall_rating}</span>
+                            {sessions.slice(0, 10).map((s) => (
+                                <div key={s.id} className="event-dropdown" style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    padding: '15px 12px',
+                                    borderBottom: '1px solid rgba(255,255,255,0.02)'
+                                }}>
+                                    <div style={{ flex: 1.5 }}>
+                                        <div style={{ color: '#fafafb', fontSize: '0.9rem' }}>{new Date(s.created_at).toLocaleDateString()} {new Date(s.created_at).toLocaleTimeString()}</div>
+                                    </div>
+                                    <div style={{ flex: 1, textAlign: 'center' }}>
+                                        <span style={{
+                                            padding: '4px 10px',
+                                            borderRadius: '20px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: '600',
+                                            backgroundColor: s.overall_rating === 'Excellent' ? 'rgba(16, 185, 129, 0.1)' : (s.overall_rating === 'Poor' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)'),
+                                            color: s.overall_rating === 'Excellent' ? '#10b981' : (s.overall_rating === 'Poor' ? '#ef4444' : '#3b82f6'),
+                                            border: `1px solid ${s.overall_rating === 'Excellent' ? 'rgba(16, 185, 129, 0.2)' : (s.overall_rating === 'Poor' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)')}`
+                                        }}>
+                                            {s.overall_rating}
+                                        </span>
+                                    </div>
+                                    <div style={{ flex: 0.5, textAlign: 'right' }}>
+                                        <button
+                                            onClick={() => handleDownloadPDF(s.id)}
+                                            style={{
+                                                background: 'rgba(255,255,255,0.05)',
+                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                color: 'white',
+                                                borderRadius: '6px',
+                                                padding: '6px 10px',
+                                                cursor: 'pointer',
+                                                fontSize: '0.8rem'
+                                            }}
+                                        >
+                                            📄 PDF
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>

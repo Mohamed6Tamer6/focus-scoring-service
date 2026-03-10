@@ -34,7 +34,15 @@ const Login = () => {
             }
 
             if (!response.ok) {
-                throw new Error(data.detail || `Server error: ${response.status}`);
+                let errorMessage = `Server error: ${response.status}`;
+                if (data.detail) {
+                    if (Array.isArray(data.detail)) {
+                        errorMessage = data.detail.map(err => `${err.loc[1]}: ${err.msg}`).join(', ');
+                    } else {
+                        errorMessage = data.detail;
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
             localStorage.setItem('token', data.access_token);

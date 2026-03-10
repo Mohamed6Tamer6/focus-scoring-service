@@ -28,9 +28,26 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return register_user(db, user_data)
 
 
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import Request, Form
+from typing import Union
+
 @router.post("/login", response_model=Token)
-def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
-    token = login_user(db, user_data)
+async def login(
+    response: Response,
+    db: Session = Depends(get_db),
+    username: str = Form(None),
+    password: str = Form(None),
+    request: Request = None
+):
+
+    if username and password:
+        user_login_data = UserLogin(email=username, password=password)
+    else:
+        body = await request.json()
+        user_login_data = UserLogin(**body)
+    
+    token = login_user(db, user_login_data)
     set_refresh_cookie(response, token.refresh_token)
     return token
 

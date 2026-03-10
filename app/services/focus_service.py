@@ -1,15 +1,13 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, WebSocket, WebSocketDisconnect
+import base64
+from dateutil.parser import parse as parse_date
+
 from app.core.focus_detector import FocusProcessor
 from app.repositories.focus_repository import save_focus_session, get_session_by_id
 from app.utils.pdf_generator import generate_pdf_report
-from dateutil.parser import parse as parse_date
-from sqlalchemy.orm import Session
-import base64
-from fastapi import WebSocket, WebSocketDisconnect
-from app.core.focus_detector import FocusProcessor
-from app.repositories.focus_repository import save_focus_session
+from app.utils.supabase_storage import upload_pdf_report
 
 _active_sessions: dict[str, FocusProcessor] = {}
 
@@ -47,11 +45,33 @@ def stop_session(db: Session, user_id: str) -> dict | None:
     if report:
         try:
             db_session = save_focus_session(db, UUID(user_id), report)
-            report['id'] = str(db_session.id)
+            session_id = str(db_session.id)
+            
+
+            report_data_for_pdf = {
+                'total_time': report.get('total_time', 0),
+                'focus_time': report.get('focus_time', 0),
+                'unfocus_time': report.get('unfocus_time', 0),
+                'absence_time': report.get('absence_time', 0),
+                'total_blinks': report.get('total_blinks', 0),
+                'unfocused_periods': report.get('unfocused_periods', []),
+                'absence_periods': report.get('absence_periods', [])
+            }
+            
+            pdf_bytes = generate_pdf_report(report_data_for_pdf)
+            
+            report_url = upload_pdf_report(pdf_bytes, user_id, session_id)
+            
+            if report_url:
+                db_session.report_url = report_url
+                db.commit()
+                report['report_url'] = report_url
+            
+            report['id'] = session_id
         except Exception as e:
-            print(f"Skipping DB save: {e}")
+            print(f"Error handling session report/upload: {e}")
             db.rollback()
-            report['id'] = ""
+            report['id'] = report.get('id', "")
 
     return report
 
@@ -93,7 +113,10 @@ def _parse_periods(periods):
         parsed.append({'start': start, 'end': end, 'duration': p.get('duration', 0)})
     return parsed
 
-def generate_session_pdf_bytes(db: Session, session_id: str, current_user_id: UUID) -> bytes:
+def generate_session_pdf_bytes(db: Session, session_id: str | UUID, current_user_id: UUID) -> bytes:
+    if isinstance(session_id, str):
+        session_id = UUID(session_id)
+        
     session = get_session_by_id(db, session_id)
     if not session:
         raise HTTPException(
@@ -117,13 +140,18 @@ def generate_session_pdf_bytes(db: Session, session_id: str, current_user_id: UU
 
 
 async def handle_focus_websocket(websocket: WebSocket, token: str):
+    await websocket.accept()
     from app.utils.jwt import decode_access_token
     
-    # Authenticate or fallback to demo dummy user
     payload = decode_access_token(token) if token else None
-    user_id = str(payload.get("sub")) if payload else "00000000-0000-0000-0000-000000000000"
+    user_id = payload.get("sub") if payload else None
+    
+    if not user_id:
+        await websocket.close(code=1008)
+        return
+        
+    user_id = str(user_id)
 
-    await websocket.accept()
     from app.database import SessionLocal
     
     try:
@@ -155,6 +183,7 @@ async def handle_focus_websocket(websocket: WebSocket, token: str):
                 await websocket.send_json({"type": "status", "status": f"zone_changed_{zone}"})
 
             elif action == "stop":
+                await websocket.send_json({"type": "status", "status": "stopping"})
                 db = SessionLocal()
                 try:
                     report = stop_session(db, user_id)

@@ -34,6 +34,7 @@ def save_focus_session(db: Session, user_id: UUID, report: dict) -> FocusSession
         longest_unfocus=round(report['longest_unfocus'], 2) if 'longest_unfocus' in report else None,
         average_absence_duration=round(report['average_absence_duration'], 2) if 'average_absence_duration' in report else None,
         longest_absence=round(report['longest_absence'], 2) if 'longest_absence' in report else None,
+        report_url=report.get('report_url'),
     )
 
     db.add(session)

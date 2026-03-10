@@ -6,6 +6,8 @@ from app.api.routes import auth_router, focus_router
 import app.models.user
 import app.models.refresh_token
 import app.models.focus_session
+import app.models.rbac  
+from app.api.routes.rbac import router as rbac_router  
 
 Base.metadata.create_all(bind=engine)
 
@@ -21,6 +23,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(focus_router)
+app.include_router(rbac_router)
 
 @app.get("/")
 def root():

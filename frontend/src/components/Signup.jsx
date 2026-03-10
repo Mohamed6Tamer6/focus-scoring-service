@@ -38,7 +38,15 @@ const Signup = () => {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.detail || 'Registration failed');
+                let errorMessage = 'Registration failed';
+                if (data.detail) {
+                    if (Array.isArray(data.detail)) {
+                        errorMessage = data.detail.map(err => `${err.loc[1]}: ${err.msg}`).join(', ');
+                    } else {
+                        errorMessage = data.detail;
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
             console.log('Registration successful');
