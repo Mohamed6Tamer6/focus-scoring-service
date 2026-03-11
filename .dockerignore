@@ -7,3 +7,14 @@ frontend
 .pytest_cache
 .vscode
 .idea
+
+*.pyo
+*.pyd
+.Python
+alembic/versions/
+scripts/
+*.md
+.gitignore
+.dockerignore
+docker-compose.yml
+Dockerfile.frontend
