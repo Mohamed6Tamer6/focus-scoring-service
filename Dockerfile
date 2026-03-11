@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --default-timeout=100 -r requirements.txt && \
-
     pip freeze | grep nvidia | xargs -r pip uninstall -y
 
 FROM python:3.10-slim

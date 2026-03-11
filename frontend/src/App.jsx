@@ -5,7 +5,16 @@ import Signup from './components/Signup'
 import Dashboard from './components/Dashboard'
 
 function App() {
-    const isAuthenticated = () => !!localStorage.getItem('token');
+    const isAuthenticated = () => {
+        const token = localStorage.getItem('token');
+        if (!token) return false;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.exp * 1000 > Date.now();
+        } catch (e) {
+            return false;
+        }
+    };
 
     return (
         <Router>

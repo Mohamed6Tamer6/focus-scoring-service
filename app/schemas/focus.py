@@ -24,7 +24,7 @@ class FocusSessionResponse(BaseModel):
     longest_unfocus: float | None = None
     average_absence_duration: float | None = None
     longest_absence: float | None = None
-    report_url: str | None = None
+    report_url: str | None = None  
     created_at: datetime
 
     class Config:

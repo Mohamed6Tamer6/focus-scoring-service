@@ -1,18 +1,19 @@
 from sqlalchemy.orm import Session
 from app.models.focus_session import FocusSession
+from app.utils.supabase_storage import get_signed_url
 from uuid import UUID
 
 
 def save_focus_session(db: Session, user_id: UUID, report: dict) -> FocusSession:
     def serialize_periods(periods):
-        serialized = []
-        for p in periods:
-            serialized.append({
+        return [
+            {
                 'start': p['start'].isoformat() if hasattr(p['start'], 'isoformat') else str(p['start']),
                 'end': p['end'].isoformat() if hasattr(p['end'], 'isoformat') else str(p['end']),
                 'duration': round(p['duration'], 2)
-            })
-        return serialized
+            }
+            for p in periods
+        ]
 
     session = FocusSession(
         user_id=user_id,
@@ -34,7 +35,7 @@ def save_focus_session(db: Session, user_id: UUID, report: dict) -> FocusSession
         longest_unfocus=round(report['longest_unfocus'], 2) if 'longest_unfocus' in report else None,
         average_absence_duration=round(report['average_absence_duration'], 2) if 'average_absence_duration' in report else None,
         longest_absence=round(report['longest_absence'], 2) if 'longest_absence' in report else None,
-        report_url=report.get('report_url'),
+        report_path=report.get('report_path'), 
     )
 
     db.add(session)
@@ -43,13 +44,34 @@ def save_focus_session(db: Session, user_id: UUID, report: dict) -> FocusSession
     return session
 
 
-def get_user_sessions(db: Session, user_id: UUID) -> list[FocusSession]:
-    return db.query(FocusSession).filter(
+def get_user_sessions(db: Session, user_id: UUID) -> list[dict]:
+
+    sessions = db.query(FocusSession).filter(
         FocusSession.user_id == user_id
     ).order_by(FocusSession.created_at.desc()).all()
 
+    result = []
+    for s in sessions:
+        session_dict = {
+            "id": s.id,
+            "created_at": s.created_at,
+            "total_time": s.total_time,
+            "focus_time": s.focus_time,
+            "focus_percentage": s.focus_percentage,
+            "overall_rating": s.overall_rating,
+            "report_url": get_signed_url(s.report_path) if s.report_path else None,
+        }
+        result.append(session_dict)
 
-def get_session_by_id(db: Session, session_id: UUID) -> FocusSession | None:
-    return db.query(FocusSession).filter(
-        FocusSession.id == session_id
-    ).first()
+    return result
+
+
+def get_session_by_id(db: Session, session_id: UUID) -> dict | None:
+    s = db.query(FocusSession).filter(FocusSession.id == session_id).first()
+    if not s:
+        return None
+
+    return {
+        **s.__dict__,
+        "report_url": get_signed_url(s.report_path) if s.report_path else None,
+    }

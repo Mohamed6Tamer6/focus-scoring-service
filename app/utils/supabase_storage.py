@@ -1,6 +1,6 @@
 from supabase import create_client, Client
 from config import settings
-import uuid
+from uuid import UUID
 
 supabase = None
 try:
@@ -10,35 +10,54 @@ except Exception as e:
     print(f"WARNING: Supabase client could not be initialized: {e}")
     print("PDF Uploads to bucket will be disabled until a valid SUPABASE_KEY is provided.")
 
-def upload_pdf_report(pdf_bytes: bytes, user_id: str, session_id: str) -> str | None:
+BUCKET_NAME = "focus_servising"
+
+
+def upload_pdf_report(pdf_bytes: bytes, user_id: UUID, session_id: UUID) -> str | None:
 
     if supabase is None:
         print("Supabase client not initialized. Skipping upload.")
         return None
-        
-    bucket_name = "focus_servising"
-    file_path = f"{user_id}/{session_id}.pdf"
-    
-    print(f"[UPLOAD] Starting upload: bucket='{bucket_name}', path='{file_path}', size={len(pdf_bytes)} bytes")
-    
+
+    file_path = f"{str(user_id)}/{str(session_id)}.pdf"
+
+    print(f"[UPLOAD] Starting upload: bucket='{BUCKET_NAME}', path='{file_path}', size={len(pdf_bytes)} bytes")
+
     try:
-        upload_response = supabase.storage.from_(bucket_name).upload(
+        upload_response = supabase.storage.from_(BUCKET_NAME).upload(
             path=file_path,
             file=pdf_bytes,
             file_options={"content-type": "application/pdf"}
         )
         print(f"[UPLOAD] Upload response: {upload_response}")
-        
-        public_url = supabase.storage.from_(bucket_name).get_public_url(file_path)
-        print(f"[UPLOAD] Public URL: {public_url}")
-        return public_url
+        print(f"[UPLOAD] Stored path: {file_path}")
+
+        return file_path
+
     except Exception as e:
         error_str = str(e)
         print(f"[UPLOAD] CRITICAL FAIL for user {user_id}, session {session_id}: {error_str}")
         if "Bucket not found" in error_str:
-            print("[UPLOAD] HINT: The bucket 'session-reports' does not exist in your Supabase project. Please create it in Storage > New Bucket.")
+            print(f"[UPLOAD] HINT: Bucket '{BUCKET_NAME}' does not exist. Create it in Storage > New Bucket.")
         elif "Invalid API key" in error_str or "invalid" in error_str.lower():
-            print("[UPLOAD] HINT: The SUPABASE_KEY may be wrong. Use the anon key from Project Settings > API.")
+            print("[UPLOAD] HINT: Check SUPABASE_KEY in .env — use the anon key from Project Settings > API.")
         elif "violates" in error_str or "security" in error_str.lower():
-            print("[UPLOAD] HINT: Check your Supabase Storage RLS policies. You may need to allow inserts on the bucket.")
+            print("[UPLOAD] HINT: Check RLS policies on the bucket.")
+        return None
+
+
+def get_signed_url(file_path: str, expires_in: int = 3600) -> str | None:
+
+    if supabase is None:
+        print("Supabase client not initialized. Cannot generate signed URL.")
+        return None
+
+    try:
+        response = supabase.storage.from_(BUCKET_NAME).create_signed_url(
+            path=file_path,
+            expires_in=expires_in
+        )
+        return response.get("signedURL")
+    except Exception as e:
+        print(f"[SIGNED_URL] Failed to generate signed URL for path '{file_path}': {e}")
         return None

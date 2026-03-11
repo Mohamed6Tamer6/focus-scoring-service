@@ -31,6 +31,6 @@ class FocusSession(Base):
     longest_unfocus = Column(Float, nullable=True)
     average_absence_duration = Column(Float, nullable=True)
     longest_absence = Column(Float, nullable=True)
-    report_url = Column(String, nullable=True)
+    report_path = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="focus_sessions")

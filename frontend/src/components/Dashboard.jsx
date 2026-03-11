@@ -13,20 +13,35 @@ const Dashboard = () => {
     const wsRef = useRef(null);
     const streamRef = useRef(null);
     const intervalRef = useRef(null);
+    const isTrackingRef = useRef(false);
+    const isStoppingRef = useRef(false);
+    const reportRef = useRef(null);
+    const hasReceivedDataRef = useRef(false);
 
-    const [isTracking, setIsTracking] = useState(false);
-    const [isStopping, setIsStopping] = useState(false);
+    const [isTracking, _setIsTracking] = useState(false);
+    const [isStopping, _setIsStopping] = useState(false);
+    const [report, _setReport] = useState(null);
     const [wsConnected, setWsConnected] = useState(false);
     const [focusZone, setFocusZone] = useState('normal');
     const [cameraReady, setCameraReady] = useState(false);
     const [showDebug, setShowDebug] = useState(true);
     const [mirror, setMirror] = useState(true);
 
+    const setIsTracking = (val) => {
+        isTrackingRef.current = val;
+        _setIsTracking(val);
+    };
+    const setIsStopping = (val) => {
+        isStoppingRef.current = val;
+        _setIsStopping(val);
+    };
+    const setReport = (val) => {
+        reportRef.current = val;
+        _setReport(val);
+    };
+
     // Live frame data
     const [liveData, setLiveData] = useState(null);
-
-    // Final report after stopping
-    const [report, setReport] = useState(null);
 
     // Past sessions
     const [sessions, setSessions] = useState([]);
@@ -86,6 +101,10 @@ const Dashboard = () => {
             const res = await fetch(`${API_BASE}/focus/sessions`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+            if (res.status === 401) {
+                handleLogout();
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 setSessions(data);
@@ -139,8 +158,20 @@ const Dashboard = () => {
 
     // Start tracking
     const handleStart = async () => {
+        if (isTrackingRef.current || isStoppingRef.current) return;
+
+        // Disable button immediately
+        setIsTracking(true);
         setReport(null);
         setLiveData(null);
+        hasReceivedDataRef.current = false;
+
+        // Close any existing connection just in case
+        if (wsRef.current) {
+            try {
+                wsRef.current.close();
+            } catch (e) { }
+        }
 
         // 1. Start camera
         await startCamera();
@@ -156,8 +187,11 @@ const Dashboard = () => {
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            hasReceivedDataRef.current = true;
             if (data.type === 'status' && data.status === 'started') {
+                // Already set to true, but ensuring state is correct
                 setIsTracking(true);
+                if (intervalRef.current) clearInterval(intervalRef.current);
                 intervalRef.current = setInterval(() => {
                     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                         const frame = captureFrame();
@@ -177,8 +211,26 @@ const Dashboard = () => {
             }
         };
 
-        ws.onclose = () => {
+        ws.onclose = (event) => {
             setWsConnected(false);
+            const wasTracking = isTrackingRef.current;
+            const wasStopping = isStoppingRef.current;
+            const currentReport = reportRef.current;
+
+            // If it's a normal close (code 1000) or we have a report, don't alert
+            const isNormalClose = event.code === 1000 || currentReport !== null;
+
+            if (!isNormalClose && !wasStopping) {
+                // If it closed unexpectedly and it's not a normal completion
+                console.error("WebSocket connection lost.", event);
+
+                // Only alert if we never really got ANY data (indicating a connection/auth failure)
+                if (!hasReceivedDataRef.current) {
+                    alert("Session expired or connection failed. Please log in again.");
+                    handleLogout();
+                }
+            }
+
             setIsTracking(false);
             setIsStopping(false);
             if (intervalRef.current) clearInterval(intervalRef.current);
@@ -257,6 +309,10 @@ const Dashboard = () => {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            if (res.status === 401) {
+                handleLogout();
+                return;
+            }
             if (!res.ok) throw new Error("Failed to generate PDF");
 
             const blob = await res.blob();

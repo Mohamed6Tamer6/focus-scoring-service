@@ -7,7 +7,7 @@ from dateutil.parser import parse as parse_date
 from app.core.focus_detector import FocusProcessor
 from app.repositories.focus_repository import save_focus_session, get_session_by_id
 from app.utils.pdf_generator import generate_pdf_report
-from app.utils.supabase_storage import upload_pdf_report
+from app.utils.supabase_storage import upload_pdf_report, get_signed_url
 
 _active_sessions: dict[str, FocusProcessor] = {}
 
@@ -44,9 +44,10 @@ def stop_session(db: Session, user_id: str) -> dict | None:
     report = processor.stop()
     if report:
         try:
+            print(f"[STOP] Saving session for user {user_id}...")
             db_session = save_focus_session(db, UUID(user_id), report)
             session_id = str(db_session.id)
-            
+            print(f"[STOP] Session saved with ID: {session_id}")
 
             report_data_for_pdf = {
                 'total_time': report.get('total_time', 0),
@@ -57,19 +58,24 @@ def stop_session(db: Session, user_id: str) -> dict | None:
                 'unfocused_periods': report.get('unfocused_periods', []),
                 'absence_periods': report.get('absence_periods', [])
             }
-            
+
             pdf_bytes = generate_pdf_report(report_data_for_pdf)
-            
-            report_url = upload_pdf_report(pdf_bytes, user_id, session_id)
-            
-            if report_url:
-                db_session.report_url = report_url
+            print(f"[STOP] PDF generated ({len(pdf_bytes)} bytes)")
+
+            report_path = upload_pdf_report(pdf_bytes, user_id, session_id)
+            print(f"[STOP] PDF upload result: {report_path}")
+
+            if report_path:
+                db_session.report_path = report_path
                 db.commit()
-                report['report_url'] = report_url
-            
+                report['report_path'] = report_path
+
             report['id'] = session_id
+            print(f"[STOP] Final report ID: {report['id']}")
         except Exception as e:
-            print(f"Error handling session report/upload: {e}")
+            import traceback
+            print(f"[STOP] ERROR: {e}")
+            traceback.print_exc()
             db.rollback()
             report['id'] = report.get('id', "")
 
@@ -78,6 +84,7 @@ def stop_session(db: Session, user_id: str) -> dict | None:
 
 def has_active_session(user_id: str) -> bool:
     return user_id in _active_sessions
+
 
 def serialize_report(report: dict) -> dict:
     if not report:
@@ -98,6 +105,11 @@ def serialize_report(report: dict) -> dict:
             serialized[key] = value.isoformat()
         else:
             serialized[key] = value
+
+    # ✅ convert stored path to signed URL — never expose path to frontend
+    if serialized.get('report_path'):
+        serialized['report_url'] = get_signed_url(serialized.pop('report_path'))
+
     return serialized
 
 
@@ -108,52 +120,54 @@ def _parse_periods(periods):
     for p in periods:
         start = p.get('start')
         end = p.get('end')
-        if isinstance(start, str): start = parse_date(start)
-        if isinstance(end, str): end = parse_date(end)
+        if isinstance(start, str):
+            start = parse_date(start)
+        if isinstance(end, str):
+            end = parse_date(end)
         parsed.append({'start': start, 'end': end, 'duration': p.get('duration', 0)})
     return parsed
+
 
 def generate_session_pdf_bytes(db: Session, session_id: str | UUID, current_user_id: UUID) -> bytes:
     if isinstance(session_id, str):
         session_id = UUID(session_id)
-        
+
     session = get_session_by_id(db, session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
         )
-        
+
     report_data = {
-        'total_time': session.total_time,
-        'focus_time': session.focus_time,
-        'unfocus_time': session.unfocus_time,
-        'absence_time': session.absence_time,
-        'total_blinks': session.total_blinks,
-        'unfocused_periods': _parse_periods(session.unfocused_periods),
-        'absence_periods': _parse_periods(session.absence_periods)
+        'total_time': session['total_time'],
+        'focus_time': session['focus_time'],
+        'unfocus_time': session['unfocus_time'],
+        'absence_time': session['absence_time'],
+        'total_blinks': session['total_blinks'],
+        'unfocused_periods': _parse_periods(session.get('unfocused_periods', [])),
+        'absence_periods': _parse_periods(session.get('absence_periods', []))
     }
-    
+
     return generate_pdf_report(report_data)
-
-
 
 
 async def handle_focus_websocket(websocket: WebSocket, token: str):
     await websocket.accept()
     from app.utils.jwt import decode_access_token
-    
+
     payload = decode_access_token(token) if token else None
     user_id = payload.get("sub") if payload else None
-    
+
     if not user_id:
+        print(f"WebSocket closed: Invalid or missing token")
         await websocket.close(code=1008)
         return
-        
+
     user_id = str(user_id)
 
     from app.database import SessionLocal
-    
+
     try:
         while True:
             data = await websocket.receive_json()
@@ -198,8 +212,10 @@ async def handle_focus_websocket(websocket: WebSocket, token: str):
     except Exception as e:
         print(f"WebSocket unhandled error: {e}")
     finally:
-        db = SessionLocal()
-        try:
-            stop_session(db, user_id)
-        finally:
-            db.close()
+        # ✅ only open DB connection if session is still active (e.g. unexpected disconnect)
+        if has_active_session(user_id):
+            db = SessionLocal()
+            try:
+                stop_session(db, user_id)
+            finally:
+                db.close()
