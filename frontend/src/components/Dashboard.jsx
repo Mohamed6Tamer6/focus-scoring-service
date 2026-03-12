@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 
-const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/focus/ws`;
+const WS_URL = 'wss://vivacious-nurturing-production.up.railway.app/focus/ws';
 const API_BASE = '/api';
 
 const Dashboard = () => {
