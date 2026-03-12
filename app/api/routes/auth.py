@@ -1,36 +1,83 @@
-# app/api/routes/auth.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status, Response, Cookie
 from sqlalchemy.orm import Session
+from typing import Annotated
 from app.database import get_db
 from app.schemas import UserCreate, UserLogin, UserResponse, Token
-from app.repositories import get_user_by_email, create_user
-from app.utils import verify_password, create_access_token
+from app.services.auth import register_user, login_user, refresh_access_token, logout_user
+from fastapi import HTTPException
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-@router.post("/register", response_model=UserResponse)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    existing_user = get_user_by_email(db, user_data.email)
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    return create_user(db, user_data)
+REFRESH_TOKEN_COOKIE = "refresh_token"
+COOKIE_MAX_AGE = 7 * 24 * 60 * 60  
 
+
+def set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_TOKEN_COOKIE,
+        value=token,
+        httponly=True,       
+        secure=True,         
+        samesite="none",     
+        max_age=COOKIE_MAX_AGE,
+    )
+
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    return register_user(db, user_data)
+
+
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import Request, Form
+from typing import Union
 
 @router.post("/login", response_model=Token)
-def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    user = get_user_by_email(db, user_data.email)
-    if not user:
+async def login(
+    response: Response,
+    db: Session = Depends(get_db),
+    username: str = Form(None),
+    password: str = Form(None),
+    request: Request = None
+):
+
+    if username and password:
+        user_login_data = UserLogin(email=username, password=password)
+    else:
+        body = await request.json()
+        user_login_data = UserLogin(**body)
+    
+    token = login_user(db, user_login_data)
+    set_refresh_cookie(response, token.refresh_token)
+    return token
+
+
+@router.post("/refresh", response_model=Token)
+def refresh(
+    response: Response,
+    db: Session = Depends(get_db),
+    refresh_token: Annotated[str | None, Cookie()] = None
+):
+    if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Refresh token missing",
         )
-    if not verify_password(user_data.password, user.hashed_password):
+    token = refresh_access_token(db, refresh_token)
+    set_refresh_cookie(response, token.refresh_token)
+    return token
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    response: Response,
+    db: Session = Depends(get_db),
+    refresh_token: Annotated[str | None, Cookie()] = None
+):
+    if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            detail="Refresh token missing",
         )
-    token = create_access_token(data={"user_id": user.id, "email": user.email})
-    return Token(access_token=token)
+    logout_user(db, refresh_token)
+    response.delete_cookie(key=REFRESH_TOKEN_COOKIE, httponly=True, secure=True, samesite="none")

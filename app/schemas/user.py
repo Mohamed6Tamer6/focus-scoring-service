@@ -1,5 +1,6 @@
-# app/schemas/user.py
 from pydantic import BaseModel, EmailStr
+from uuid import UUID
+
 
 class UserCreate(BaseModel):
     name: str
@@ -11,9 +12,8 @@ class UserLogin(BaseModel):
     password: str
 
 class UserResponse(BaseModel):
-    id: int
+    id: UUID
     name: str
     email: EmailStr
 
     model_config = {"from_attributes": True}
-    
