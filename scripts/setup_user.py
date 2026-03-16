@@ -10,21 +10,21 @@ from app.models.rbac import Role, UserRole
 from app.models.user import User
 from app.repositories.rbac_repository import get_role_by_name, create_role, assign_role_to_user
 
-def setup_admin(email: str = None):
+def setup_user(email: str = None):
     db = SessionLocal()
     try:
         # Ensure Roles exist
         user_role = get_role_by_name(db, "user")
         if not user_role:
             print("Creating 'user' role...")
-            create_role(db, name="user", description="Default user access")
+            user_role = create_role(db, name="user", description="Default user access")
+        else:
+            print("'user' role already exists.")
             
         admin_role = get_role_by_name(db, "admin")
         if not admin_role:
             print("Creating 'admin' role...")
-            admin_role = create_role(db, name="admin", description="Full system access")
-        else:
-            print("'admin' role already exists.")
+            create_role(db, name="admin", description="Admin access")
 
         if email:
             user = db.query(User).filter(User.email == email).first()
@@ -34,14 +34,14 @@ def setup_admin(email: str = None):
             
             existing_ur = db.query(UserRole).filter(
                 UserRole.user_id == user.id,
-                UserRole.role_id == admin_role.id
+                UserRole.role_id == user_role.id
             ).first()
 
             if not existing_ur:
-                print(f"Assigning 'admin' role to {email}...")
-                assign_role_to_user(db, user_id=user.id, role_id=admin_role.id)
+                print(f"Assigning 'user' role to {email}...")
+                assign_role_to_user(db, user_id=user.id, role_id=user_role.id)
             else:
-                print(f"User {email} already has 'admin' role.")
+                print(f"User {email} already has 'user' role.")
         
         db.commit()
     except Exception as e:
@@ -52,4 +52,4 @@ def setup_admin(email: str = None):
 
 if __name__ == "__main__":
     email_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    setup_admin(email_arg)
+    setup_user(email_arg)

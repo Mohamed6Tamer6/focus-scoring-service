@@ -33,17 +33,23 @@ def register_user(db: Session, user_data: UserCreate) -> UserResponse:
     # Create the user
     user = create_user(db, user_data)
     
-    # ── RBAC: Assign 'admin' role automatically ──
+    # ── RBAC: Assign requested role ──
     try:
-        admin_role = get_role_by_name(db, "admin")
-        if not admin_role:
-            # Create role if it doesn't exist (safety first)
-            admin_role = rbac_service.create_role(db, name="admin", description="Automatic admin role")
+        # Ensure default roles exist
+        target_role_name = user_data.role if user_data.role in ["user", "admin"] else "user"
         
-        rbac_service.assign_role_to_user(db, user_id=user.id, role_id=admin_role.id)
+        # Check and create 'user' role if needed
+        if not get_role_by_name(db, "user"):
+            rbac_service.create_role(db, name="user", description="Default user role")
+        
+        # Check and create 'admin' role if needed
+        if not get_role_by_name(db, "admin"):
+            rbac_service.create_role(db, name="admin", description="Admin role")
+
+        role = get_role_by_name(db, target_role_name)
+        if role:
+            rbac_service.assign_role_to_user(db, user_id=user.id, role_id=role.id)
     except Exception as e:
-        # We don't want registration to fail if RBAC fails, 
-        # but in this case the user specifically wants this, so maybe just log it.
         print(f"RBAC Error during registration: {e}")
     
     return user

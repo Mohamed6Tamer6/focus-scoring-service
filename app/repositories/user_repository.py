@@ -18,9 +18,20 @@ def create_user(db: Session, user_data: UserCreate):
     new_user = User(
         name=user_data.name,
         email=user_data.email,
-        hashed_password=hashed
+        hashed_password=hashed,
+        admin_id=user_data.admin_id
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
+
+from app.models.rbac import Role, UserRole
+
+def get_all_admins(db: Session):
+    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    if not admin_role:
+        return []
+    
+    # Get all users who have this role
+    return db.query(User).join(UserRole, User.id == UserRole.user_id).filter(UserRole.role_id == admin_role.id).all()

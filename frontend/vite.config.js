@@ -8,16 +8,16 @@ export default defineConfig({
         port: 3000,
         proxy: {
             '/api/focus/ws': {
-                target: 'wss://vivacious-nurturing-production.up.railway.app',
+                target: 'ws://127.0.0.1:8000',
                 ws: true,
-                secure: true,
+                secure: false,
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/api/, '')
             },
             '/api': {
-                target: 'https://vivacious-nurturing-production.up.railway.app',
+                target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
-                secure: true,
+                secure: false,
                 rewrite: (path) => path.replace(/^\/api/, '')
             }
         }

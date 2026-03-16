@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, Response, Cookie
 from sqlalchemy.orm import Session
 from typing import Annotated
 from app.database import get_db
-from app.schemas import UserCreate, UserLogin, UserResponse, Token
+from app.schemas import UserCreate, UserLogin, UserResponse, Token, UserUpdate
 from app.services.auth import register_user, login_user, refresh_access_token, logout_user
 from fastapi import HTTPException
 
@@ -34,20 +34,39 @@ from typing import Union
 
 @router.post("/login", response_model=Token)
 async def login(
+    request: Request,
     response: Response,
-    db: Session = Depends(get_db),
-    username: str = Form(None),
-    password: str = Form(None),
-    request: Request = None
+    db: Session = Depends(get_db)
 ):
-
-    if username and password:
-        user_login_data = UserLogin(email=username, password=password)
-    else:
-        body = await request.json()
-        user_login_data = UserLogin(**body)
+    # Manually check content type to avoid Form parameter consumption issues
+    content_type = request.headers.get("content-type", "")
     
-    token = login_user(db, user_login_data)
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            user_login_data = UserLogin(**body)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid JSON login data"
+            )
+    else:
+        # Try to parse as form data
+        try:
+            form = await request.form()
+            email = form.get("username") or form.get("email")
+            password = form.get("password")
+            if not email or not password:
+                raise ValueError("Missing email or password in form data")
+            user_login_data = UserLogin(email=email, password=password)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid form login data or missing credentials"
+            )
+    
+    from fastapi.concurrency import run_in_threadpool
+    token = await run_in_threadpool(login_user, db, user_login_data)
     set_refresh_cookie(response, token.refresh_token)
     return token
 
@@ -81,3 +100,36 @@ def logout(
         )
     logout_user(db, refresh_token)
     response.delete_cookie(key=REFRESH_TOKEN_COOKIE, httponly=True, secure=True, samesite="none")
+
+from app.api.dependencies import get_current_user
+from app.models.user import User as UserTable
+from app.repositories.user_repository import get_all_admins
+
+@router.get("/profile", response_model=UserResponse)
+def get_profile(current_user: UserTable = Depends(get_current_user)):
+    return current_user
+
+@router.patch("/profile", response_model=UserResponse)
+def update_profile(
+    body: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserTable = Depends(get_current_user)
+):
+    if body.admin_id is not None:
+        current_user.admin_id = body.admin_id
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+@router.get("/admins", response_model=list[UserResponse])
+def list_admins(db: Session = Depends(get_db)):
+    return get_all_admins(db)
+
+@router.get("/subordinates", response_model=list[UserResponse])
+def list_subordinates(
+    db: Session = Depends(get_db),
+    current_admin: UserTable = Depends(get_current_user)
+):
+    subordinates = db.query(UserTable).filter(UserTable.admin_id == current_admin.id).all()
+    return subordinates

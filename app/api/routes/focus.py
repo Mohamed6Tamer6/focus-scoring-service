@@ -11,8 +11,9 @@ from app.services.focus_service import (
     generate_session_pdf_bytes,
     handle_focus_websocket,
 )
-from app.utils.supabase_storage import get_signed_url
 from uuid import UUID
+from datetime import date
+from app.api.dependencies import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/focus", tags=["Focus"])
 
@@ -27,11 +28,12 @@ async def focus_websocket(
 
 @router.get("/sessions", response_model=list[FocusSessionResponse])
 def list_sessions(
+    target_date: date | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # ✅ get_user_sessions returns dicts with signed URLs already generated
-    return get_user_sessions(db, current_user.id)
+    # Filter by date if provided
+    return get_user_sessions(db, current_user.id, target_date)
 
 
 @router.get("/sessions/{session_id}", response_model=FocusSessionResponse)
@@ -54,11 +56,24 @@ def get_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
         )
+    
+    # Check if user owns the session or is the admin of the owner
+    is_admin = any(ur.role.name == "admin" for ur in current_user.user_roles)
+    
     if session["user_id"] != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this session",
-        )
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this session",
+            )
+        # If it is an admin, check if the session's user reports to them
+        from app.repositories import get_user_by_id as get_session_owner
+        owner = get_session_owner(db, session["user_id"])
+        if not owner or owner.admin_id != current_user.id:
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this subordinate's session",
+            )
 
     return session
 
@@ -67,7 +82,7 @@ def get_session(
 def download_session_pdf(
     session_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin), # Restrict to ADMIN only
 ):
     try:
         session_uuid = UUID(session_id)
@@ -83,14 +98,54 @@ def download_session_pdf(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
         )
-    if session["user_id"] != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access this report",
-        )
+    
+    # Ensure admin owns the user who owns the session (or it's their own session)
+    if session["user_id"] != current_admin.id:
+        from app.repositories import get_user_by_id as get_session_owner
+        owner = get_session_owner(db, session["user_id"])
+        if not owner or owner.admin_id != current_admin.id:
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to download this report",
+            )
 
-    pdf_bytes = generate_session_pdf_bytes(db, session_uuid, current_user.id)
+    pdf_bytes = generate_session_pdf_bytes(db, session_uuid, current_admin.id)
     headers = {
         'Content-Disposition': f'attachment; filename="focus_report_{session_id}.pdf"'
     }
     return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+
+@router.get("/admin/sessions/{user_id}", response_model=list[FocusSessionResponse])
+def admin_list_user_sessions(
+    user_id: UUID,
+    target_date: date | None = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    # Verify user reports to this admin
+    from app.repositories import get_user_by_id as get_target_user
+    user = get_target_user(db, user_id)
+    if not user or user.admin_id != current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view this user's sessions",
+        )
+    
+    return get_user_sessions(db, user_id, target_date)
+
+@router.get("/admin/sessions/{user_id}/dates", response_model=list[date])
+def admin_list_user_session_dates(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    from app.repositories import get_user_by_id as get_target_user
+    user = get_target_user(db, user_id)
+    if not user or user.admin_id != current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view this user's sessions",
+        )
+    
+    from app.repositories.focus_repository import get_user_session_dates
+    return get_user_session_dates(db, user_id)

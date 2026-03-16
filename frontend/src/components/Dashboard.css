@@ -326,6 +326,137 @@
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
+/* ─── Admin Dashboard ────────────────────────────── */
+.user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.user-item {
+    background: #31333f;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.user-item:hover {
+    background: #3a3c48;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.user-item.active {
+    background: #ff4b4b22;
+    border-color: #ff4b4b;
+}
+
+.user-item strong {
+    font-size: 0.95rem;
+    color: #fff;
+}
+
+.user-item span {
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+.hint-text {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin-top: 10px;
+}
+
+/* Drilldown styles */
+.view-btn {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid #3b82f6;
+    color: #3b82f6;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.view-btn:hover {
+    background: #3b82f6;
+    color: white;
+}
+
+.pdf-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.pdf-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.date-pill {
+    transition: all 0.2s ease;
+}
+
+.date-pill:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.loading-spinner-tiny {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #31333f 25%, #3a3c48 50%, #31333f 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
 @media (max-width: 900px) {
     .event-columns {
         grid-template-columns: 1fr;

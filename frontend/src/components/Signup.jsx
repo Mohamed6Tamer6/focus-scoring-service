@@ -8,10 +8,20 @@ const Signup = () => {
         email: '',
         password: '',
         confirmPassword: '',
+        role: 'user',
+        admin_id: '',
     });
 
+    const [admins, setAdmins] = useState([]);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    React.useEffect(() => {
+        fetch('/api/auth/admins')
+            .then(res => res.json())
+            .then(data => setAdmins(data))
+            .catch(err => console.error('Error fetching admins:', err));
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -19,6 +29,11 @@ const Signup = () => {
 
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
+            return;
+        }
+
+        if (formData.role === 'user' && admins.length > 0 && !formData.admin_id) {
+            setError('Please selecting an Admin you report to');
             return;
         }
 
@@ -31,7 +46,9 @@ const Signup = () => {
                 body: JSON.stringify({
                     name: formData.fullName,
                     email: formData.email,
-                    password: formData.password
+                    password: formData.password,
+                    role: formData.role,
+                    admin_id: (formData.role === 'user' && formData.admin_id) ? formData.admin_id : null
                 }),
             });
 
@@ -110,6 +127,38 @@ const Signup = () => {
                         required
                     />
                 </div>
+                <div className="form-group">
+                    <label htmlFor="role">Sign up as</label>
+                    <select
+                        id="role"
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                        required
+                        className="select-input"
+                    >
+                        <option value="user">User (Work from Home / Freelancer)</option>
+                        <option value="admin">Admin (Manager / Company)</option>
+                    </select>
+                </div>
+
+                {formData.role === 'user' && (
+                    <div className="form-group">
+                        <label htmlFor="admin_id">Select Manager (Admin)</label>
+                        <select
+                            id="admin_id"
+                            value={formData.admin_id}
+                            onChange={(e) => setFormData({ ...formData, admin_id: e.target.value })}
+                            required={admins.length > 0}
+                            className="select-input"
+                        >
+                            <option value="">{admins.length > 0 ? '-- Select Admin --' : '-- No Admins Available --'}</option>
+                            {admins.map(admin => (
+                                <option key={admin.id} value={admin.id}>{admin.name} ({admin.email})</option>
+                            ))}
+                        </select>
+                        {admins.length === 0 && <p className="hint-text">Note: You can skip this if no admin is registered yet.</p>}
+                    </div>
+                )}
                 <button type="submit" className="btn-primary" disabled={loading}>
                     {loading ? 'Creating Account...' : 'Create Account'}
                 </button>
